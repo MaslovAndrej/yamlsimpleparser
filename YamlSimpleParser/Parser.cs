@@ -3,6 +3,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Data;
+using System.Text;
 
 namespace YamlSimple
 {
@@ -114,15 +115,82 @@ namespace YamlSimple
             return yaml.Replace(oldLine, newLine);
         }
 
-        private static List<string> GetYamlLines(string yaml)
+        private static string GetSeparator(string yaml)
         {
             var separator = "\n";
-
             if (yaml.Contains(Environment.NewLine))
                 separator = Environment.NewLine;
 
+            return separator;
+        }
+
+        private static List<string> GetYamlLines(string yaml)
+        {
+            var separator = GetSeparator(yaml);
             return yaml.Split(new string[] { separator }, StringSplitOptions.None)
               .Where(x => !string.IsNullOrWhiteSpace(x) && !x.Trim().StartsWith("#")).ToList();
+        }
+
+        public static void AddFileStringValue(string path, string key, string value)
+        {
+            if (!File.Exists(path))
+                return;
+
+            var yaml = File.ReadAllText(path);
+            yaml = AddStringValue(yaml, key, value);
+            File.WriteAllText(path, yaml);
+        }
+
+        private static int GetBreaksCount(string key)
+        {
+            return key.TrimEnd().Count(x => x == ' ');
+        }
+
+        public static string AddStringValue(string yaml, string keyPath, string value)
+        {
+            var values = Parse(yaml);
+            if (values.Any(x => x.Key == keyPath))
+                return yaml;
+
+            var lines = GetYamlLines(yaml);
+
+            var addedKey = keyPath;
+            var position = 0;
+            if (keyPath.Contains("."))
+            {
+                var keySplit = keyPath.Split('.');
+                addedKey = keySplit.Last();
+
+                foreach (var key in keySplit.Where(x => x != addedKey))
+                    position = lines.FindIndex(x => x.Contains(key) && x.Contains(":"));
+            }
+
+            var breaksCount = GetBreaksCount(lines.ElementAt(position));
+            var breaks = new StringBuilder();
+            for (var i = 0; i < breaksCount + 4; i++)
+                breaks.Append(" ");
+
+            lines.Insert(position + 1, $"{breaks}{addedKey}: '{value}'");
+            var builder = new StringBuilder();
+            foreach (var line in lines)
+                builder.AppendLine(line);
+
+            return builder.ToString();
+        }
+
+        public static bool CheckFileKey(string path, string key)
+        {
+            if (!File.Exists(path))
+                return false;
+
+            var yaml = File.ReadAllText(path);
+            return CheckKey(yaml, key);
+        }
+
+        public static bool CheckKey(string yaml, string key)
+        {
+            var values = Parse(yaml);
+            return values.Any(x => x.Key == key);
         }
     }
 }
